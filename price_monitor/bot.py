@@ -149,6 +149,12 @@ async def job_promos(ctx: ContextTypes.DEFAULT_TYPE):
     await promos.scan(ctx.bot_data["db"], notifier(ctx.bot))
 
 
+async def deny(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Chat fora da lista: não responde, mas registra o ID para o dono poder autorizá-lo."""
+    u = update.effective_user
+    log.warning("chat não autorizado: id=%s usuário=@%s", update.effective_chat.id, u.username if u else None)
+
+
 async def on_error(update, ctx: ContextTypes.DEFAULT_TYPE):
     log.error("erro no handler", exc_info=ctx.error)
 
@@ -167,15 +173,10 @@ def need(name):
     return v
 
 
-def main():
-    logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
-    load_env()
-    token, allowed = need("TELEGRAM_TOKEN"), [int(x) for x in need("ALLOWED_CHAT_IDS").split(",")]
-    db_path = os.getenv("DB_PATH", "data/price_monitor.db")
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-
-    app = ApplicationBuilder().token(token).concurrent_updates(True).build()
-    app.bot_data.update(db=DB(db_path), drop_pct=float(os.getenv("DROP_PCT", "5")))
+def build_app(builder, allowed, db_path, drop_pct=5.0):
+    """Monta handlers e jobs. `builder` já traz token (ou um bot falso, nos testes)."""
+    app = builder.concurrent_updates(True).build()
+    app.bot_data.update(db=DB(db_path), drop_pct=drop_pct)
     ok = filters.Chat(chat_id=allowed)  # só os chats autorizados falam com o bot
     for names, fn in (
         (["start", "help", "ajuda"], start),
@@ -190,10 +191,22 @@ def main():
     ):
         app.add_handler(CommandHandler(names, fn, filters=ok))
     app.add_handler(MessageHandler(ok & filters.TEXT & ~filters.COMMAND & filters.Regex(URL), add))
+    app.add_handler(MessageHandler(~ok, deny), group=1)
     app.add_error_handler(on_error)
-    app.job_queue.run_repeating(job_prices, interval=int(os.getenv("CHECK_INTERVAL_MIN", "30")) * 60, first=30)
-    app.job_queue.run_repeating(job_promos, interval=int(os.getenv("PROMO_INTERVAL_MIN", "10")) * 60, first=60)
-    app.run_polling()
+    if app.job_queue:
+        app.job_queue.run_repeating(job_prices, interval=int(os.getenv("CHECK_INTERVAL_MIN", "30")) * 60, first=30)
+        app.job_queue.run_repeating(job_promos, interval=int(os.getenv("PROMO_INTERVAL_MIN", "10")) * 60, first=60)
+    return app
+
+
+def main():
+    logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # o INFO do httpx imprime a URL com o token do bot
+    load_env()
+    token, allowed = need("TELEGRAM_TOKEN"), [int(x) for x in need("ALLOWED_CHAT_IDS").split(",")]
+    db_path = os.getenv("DB_PATH", "data/price_monitor.db")
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    build_app(ApplicationBuilder().token(token), allowed, db_path, float(os.getenv("DROP_PCT", "5"))).run_polling()
 
 
 if __name__ == "__main__":
