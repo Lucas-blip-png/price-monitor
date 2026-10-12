@@ -169,6 +169,7 @@ def need(name):
 
 def main():
     logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # o INFO do httpx imprime a URL com o token do bot
     load_env()
     token, allowed = need("TELEGRAM_TOKEN"), [int(x) for x in need("ALLOWED_CHAT_IDS").split(",")]
     db_path = os.getenv("DB_PATH", "data/price_monitor.db")
