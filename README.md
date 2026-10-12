@@ -42,6 +42,18 @@ docker compose up -d --build
 
 Site fora da lista? Use o seletor CSS do preço, por exemplo `/add https://loja.com/produto 200 css=span.preco`. Antes disso o bot tenta o JSON-LD da página.
 
+## Rodar 24h num servidor gratuito (Oracle Cloud Always Free)
+
+O bot só avisa com o PC desligado se rodar num servidor sempre ligado. A Oracle oferece uma VM gratuita permanente (exige cartão só para verificar a identidade).
+
+1. Crie a conta em [cloud.oracle.com](https://cloud.oracle.com). Escolha a **região principal** com cuidado: não dá para trocar depois.
+2. *Compute → Instances → Create instance*: imagem **Ubuntu 22.04**, shape `VM.Standard.E2.1.Micro` (Always Free, AMD). O `VM.Standard.A1.Flex` (ARM) também é gratuito, mas costuma estar sem capacidade. Baixe a chave SSH. Não precisa abrir portas além do SSH: o bot só faz conexões de saída.
+3. Pare o bot local (`docker compose down`): dois bots com o mesmo token disputam as mensagens.
+4. No PowerShell, na pasta do projeto: `.\deploy\deploy.ps1 -Server ubuntu@IP_DA_VM -Key C:\caminho\chave.key`. O script envia o código, o `.env` (permissão 600) e o banco, instala o Docker e sobe o container com `restart: unless-stopped`. Rode de novo para atualizar.
+5. Log: `ssh -i chave ubuntu@IP "cd price-monitor && sudo docker compose logs -f"`.
+
+**Atenção:** a Oracle pode recolher instâncias Always Free quase ociosas (uso de CPU muito baixo por 7 dias). Se acontecer, migre a conta para *Pay As You Go*: os recursos Always Free continuam sem custo.
+
 ## Limitações
 
 - **Mercado Livre:** a API pública exige token e a página redireciona clientes HTTP para uma verificação de conta, então `/add` falha por padrão. Com um token de aplicação em `ML_ACCESS_TOKEN` a leitura via API é tentada (não testada). Os canais de promoção cobrem bem as ofertas do ML.
