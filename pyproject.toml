@@ -1,0 +1,19 @@
+[project]
+name = "price-monitor"
+version = "0.1.0"
+description = "Bot de Telegram que monitora preços e promoções"
+requires-python = ">=3.11"
+dependencies = [
+    "python-telegram-bot[job-queue]>=21",
+    "httpx>=0.27",
+    "beautifulsoup4>=4.12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools]
+packages = ["price_monitor", "price_monitor.stores"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
