@@ -65,8 +65,8 @@ async def list_(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 def _id(ctx, n=1):
-    a = ctx.args
-    return int(a[0]) if len(a) >= n and a[0].isdigit() else None
+    s = ctx.args[0].lstrip("#") if len(ctx.args) >= n else ""  # aceita "#1" como o /list mostra
+    return int(s) if s.isdigit() else None
 
 
 async def remove(update: Update, ctx: ContextTypes.DEFAULT_TYPE):

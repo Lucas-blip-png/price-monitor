@@ -69,11 +69,11 @@ def test_fluxo_completo(tmp_path, monkeypatch):
         assert "✅ #1 Mouse Logitech" in r and "R$ 1.019,90" in r
         assert "#1 Mouse Logitech" in await say(DONO, "/list")
         # alvo + queda de preço + /check dispara alerta
-        assert "R$ 900,00" in await say(DONO, "/target 1 900")
+        assert "R$ 900,00" in await say(DONO, "/target #1 900")
         preco["v"] = 850.0
         r = await say(DONO, "/check")
         assert "atingiu seu alvo de R$ 900,00" in r and "#1 R$ 850,00" in r
-        assert "mín R$ 850,00" in await say(DONO, "/history 1")
+        assert "mín R$ 850,00" in await say(DONO, "/history #1")
         # /check de novo não repete o alerta
         assert "atingiu" not in await say(DONO, "/check")
         # canais e palavras-chave
