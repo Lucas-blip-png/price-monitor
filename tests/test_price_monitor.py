@@ -1,4 +1,5 @@
 import asyncio
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +8,7 @@ from price_monitor import http, promos
 from price_monitor.alerts import check_product, evaluate
 from price_monitor.db import DB
 from price_monitor.prices import Item, brl, find_prices, parse_price
+from price_monitor.promos import Post
 from price_monitor.stores import amazon
 from price_monitor.stores.generic import parse_html
 
@@ -147,5 +149,52 @@ def test_scan_canal(monkeypatch):
 
 
 def test_match_post_por_produto():
-    assert promos.match_post("Mouse Gamer Logitech G203 com desconto", [], ["Mouse Gamer Logitech G203 Preto"])
-    assert promos.match_post("Geladeira em oferta", [], ["Mouse Gamer Logitech G203 Preto"]) is None
+    prods = [{"title": "Mouse Gamer Logitech G203 Preto", "last_price": 200.0}]
+    reason, prod = promos.match_post("Mouse Gamer Logitech G203 com desconto", [], prods)
+    assert "produto" in reason and prod is prods[0]
+    assert promos.match_post("Geladeira em oferta", [], prods) is None
+    assert promos.match_post("Cafeteira barata", ["cafeteira"], prods)[1] is None
+
+
+def test_best_price():
+    assert promos.best_price("Notebook de R$ 4.999 por R$ 3.799 em 10x de R$ 379,90") == 3799.0
+    assert promos.best_price("Mouse R$ 120 + frete R$ 9,90") == 120.0  # sem 'por': o maior
+    assert promos.best_price("Fone à vista R$ 1.800 ou 12x de R$ 199") == 1800.0  # parcela ignorada
+    assert promos.best_price("Camisa ❌ De: R$79,90 ✅ Por: R$28,90 🔻 64% de desconto") == 28.9  # post real
+    assert promos.best_price("sem preço aqui") is None
+
+
+def test_melhor_compara_canais_e_produtos(monkeypatch):
+    agora = time.time()
+    posts = [
+        Post(1, "Mouse Logitech G203 por R$ 150", agora - 3600),
+        Post(2, "Mouse Logitech G203 por R$ 120", agora - 2 * 86400),
+        Post(3, "Teclado Redragon por R$ 90", agora),
+    ]
+
+    async def fake_get(url, retries=2):
+        return SimpleNamespace(text=_canal_html(*[(p.id, p.text) for p in posts]), url=url)
+
+    monkeypatch.setattr(http, "get", fake_get)
+    db = DB()
+    db.add_product(1, "https://www.kabum.com.br/p/1", "Mouse Gamer Logitech G203 Preto", 200.0)
+    db.add_channel(1, "ofertas", 99)  # nada é "novo": só /melhor usa os posts
+    asyncio.run(promos.scan(db, lambda c, t: None))
+    deals = promos.best_deals(db, 1, "logitech g203")
+    assert [d.price for d in deals] == [120.0, 150.0, 200.0]
+    assert deals[0].link == "https://t.me/ofertas/2" and "kabum.com.br" in deals[2].source
+    assert promos.best_deals(db, 1, "geladeira") == [] and promos.best_deals(db, 1, "") == []
+    assert promos.best_deals(db, 2, "logitech g203") == []  # outro chat não vê nada
+
+
+def test_aviso_mais_barato_que_o_seu(monkeypatch):
+    monkeypatch.setattr(http, "get", _fake_get(_canal_html((7, "Mouse Gamer Logitech G203 Preto por R$ 150"))))
+    db, msgs = DB(), []
+
+    async def notify(chat, text):
+        msgs.append(text)
+
+    db.add_product(1, "http://x/p", "Mouse Gamer Logitech G203 Preto", 200.0)
+    db.add_channel(1, "ofertas", 0)
+    asyncio.run(promos.scan(db, notify))
+    assert len(msgs) == 1 and "R$ 150,00" in msgs[0] and "mais barato que o seu preço atual (R$ 200,00)" in msgs[0]

@@ -36,6 +36,9 @@ docker compose up -d --build
 | `/check` | força uma checagem agora |
 | `/canal add\|remove\|list <@canal>` | canais públicos de promoção |
 | `/palavra add\|remove\|list <termo>` | palavras-chave que disparam aviso |
+| `/melhor <produto>` | as 5 ofertas mais baratas do produto, entre os posts dos canais (últimos 30 dias) e os seus produtos monitorados |
+
+**Melhor promoção:** o bot guarda os posts dos canais com o preço extraído (valor depois de "por"; parcelas como "10x de R$ 199" são ignoradas). Quando um post casa com um produto que você monitora e custa menos que o preço atual dele, o aviso vem com 🔥 *mais barato que o seu preço atual*. O preço é uma heurística de texto: cupons e frete soltos no post podem enganar. Canais testados: `promobit`, `promocoes`, `ofertasdodia`, `gafanhotoapp`, `cuponomia`.
 
 Site fora da lista? Use o seletor CSS do preço, por exemplo `/add https://loja.com/produto 200 css=span.preco`. Antes disso o bot tenta o JSON-LD da página.
 
