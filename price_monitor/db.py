@@ -25,6 +25,15 @@ CREATE TABLE IF NOT EXISTS channels (
     last_post_id INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (chat_id, name)
 );
+CREATE TABLE IF NOT EXISTS posts (
+    chat_id INTEGER NOT NULL,
+    channel TEXT NOT NULL,
+    post_id INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    price REAL,
+    ts REAL NOT NULL,
+    PRIMARY KEY (chat_id, channel, post_id)
+);
 CREATE TABLE IF NOT EXISTS keywords (
     chat_id INTEGER NOT NULL,
     term TEXT NOT NULL,
@@ -109,6 +118,22 @@ class DB:
 
     def set_last_post(self, chat_id, name, post_id) -> None:
         self.c.execute("UPDATE channels SET last_post_id=? WHERE chat_id=? AND name=?", (post_id, chat_id, name))
+        self.c.commit()
+
+    # posts dos canais (base do /melhor)
+    def save_post(self, chat_id, channel, post_id, text, price, ts) -> None:
+        self.c.execute(
+            "INSERT OR IGNORE INTO posts VALUES(?,?,?,?,?,?)", (chat_id, channel, post_id, text, price, ts)
+        )
+        self.c.commit()
+
+    def posts_since(self, chat_id, since) -> list[sqlite3.Row]:
+        return self.c.execute(
+            "SELECT * FROM posts WHERE chat_id=? AND price IS NOT NULL AND ts>=?", (chat_id, since)
+        ).fetchall()
+
+    def purge_posts(self, before) -> None:
+        self.c.execute("DELETE FROM posts WHERE ts<?", (before,))
         self.c.commit()
 
     # palavras-chave

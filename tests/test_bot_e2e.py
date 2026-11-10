@@ -38,7 +38,7 @@ def test_fluxo_completo(tmp_path, monkeypatch):
         return Item("Mouse Logitech", preco["v"])
 
     async def fake_canal(name):
-        return [Post(10, "oferta velha")]
+        return [Post(10, "Mouse Logitech em oferta por R$ 800", time.time())]
 
     monkeypatch.setattr(botmod, "fetch_item", fake_fetch)
     monkeypatch.setattr(botmod.promos, "fetch_channel", fake_canal)
@@ -79,6 +79,9 @@ def test_fluxo_completo(tmp_path, monkeypatch):
         # canais e palavras-chave
         assert "Monitorando @ofertas" in await say(DONO, "/canal add @Ofertas")
         assert "@ofertas" in await say(DONO, "/canal list")
+        r = await say(DONO, "/melhor mouse logitech")  # post do canal (800) vence o seu produto (850)
+        assert r.index("R$ 800,00") < r.index("R$ 850,00") and "@ofertas" in r and "seu #1" in r
+        assert "Uso:" in await say(DONO, "/melhor")
         assert "cafeteira" in await say(DONO, "/palavra add Cafeteira") + await say(DONO, "/palavra list")
         assert "Uso:" in await say(DONO, "/canal add ../etc")  # nome inválido é recusado
         # erro de loja vira mensagem, não exceção

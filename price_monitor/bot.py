@@ -23,7 +23,8 @@ Cole um link de produto (ou /add <url> [alvo] [css=<seletor>]) e eu aviso quando
 
 /list · /remove <id> · /target <id> <valor> · /history <id> · /check
 /canal add|remove|list <@canal>  (canais públicos de promoção)
-/palavra add|remove|list <termo>  (avisa posts com essa palavra)"""
+/palavra add|remove|list <termo>  (avisa posts com essa palavra)
+/melhor <produto>  (as ofertas mais baratas dos canais e dos seus produtos)"""
 
 
 def notifier(bot):
@@ -116,7 +117,8 @@ async def canal(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if not posts:
             return await update.message.reply_text("❌ Canal não encontrado ou sem preview público (t.me/s/…).")
         db.add_channel(chat, name, max(p.id for p in posts))  # só posts novos a partir de agora
-        msg = f"✅ Monitorando @{name}. Use /palavra add <termo> para filtrar."
+        promos.remember(db, chat, name, posts)  # mas os recentes já alimentam o /melhor
+        msg = f"✅ Monitorando @{name}. Use /palavra add <termo> para filtrar e /melhor <produto> para comparar."
     elif sub == "remove" and name:
         msg = "🗑️ Removido." if db.remove_channel(chat, name) else "Canal não está na lista."
     else:
@@ -137,6 +139,24 @@ async def palavra(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     else:
         msg = "Uso: /palavra add|remove|list <termo>"
     await update.message.reply_text(msg)
+
+
+def _ago(ts: float) -> str:
+    s = time.time() - ts
+    return "agora" if s < 3600 else f"{int(s // 3600)}h" if s < 86400 else f"{int(s // 86400)}d"
+
+
+async def melhor(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    term = " ".join(ctx.args).strip()
+    reply = lambda t: update.message.reply_text(t, link_preview_options=LinkPreviewOptions(is_disabled=True))
+    if not term:
+        return await reply("Uso: /melhor <produto>, por exemplo /melhor rtx 4060")
+    deals = promos.best_deals(ctx.bot_data["db"], update.effective_chat.id, term)
+    if not deals:
+        return await reply("Nada encontrado nos canais salvos nem nos seus produtos. Adicione canais com /canal add.")
+    lines = [f"🏆 Melhores preços para «{term}»"]
+    lines += [f"{i}. {brl(d.price)} · {d.source} · {_ago(d.ts)}\n   {d.link}" for i, d in enumerate(deals, 1)]
+    await reply("\n".join(lines))
 
 
 async def job_prices(ctx: ContextTypes.DEFAULT_TYPE):
@@ -188,6 +208,7 @@ def build_app(builder, allowed, db_path, drop_pct=5.0):
         (["check"], check),
         (["canal"], canal),
         (["palavra"], palavra),
+        (["melhor"], melhor),
     ):
         app.add_handler(CommandHandler(names, fn, filters=ok))
     app.add_handler(MessageHandler(ok & filters.TEXT & ~filters.COMMAND & filters.Regex(URL), add))
